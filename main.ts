@@ -1,4 +1,22 @@
 //% weight=100 color=#0fbc11 icon="\uf2c2"
+const RC522_CS = DigitalPin.P16 // Change if you use another pin
+const RC522_RST = DigitalPin.P12 // Optional reset pin
+
+function spiWrite(address: number, value: number): void {
+    pins.digitalWritePin(RC522_CS, 0)
+    pins.spiWrite((address << 1) & 0x7E)
+    pins.spiWrite(value)
+    pins.digitalWritePin(RC522_CS, 1)
+}
+
+function spiRead(address: number): number {
+    pins.digitalWritePin(RC522_CS, 0)
+    pins.spiWrite(((address << 1) & 0x7E) | 0x80)
+    const result = pins.spiWrite(0)
+    pins.digitalWritePin(RC522_CS, 1)
+    return result
+}
+
 namespace NTAG {
     //% block="NTAG write page %page data %text"
     //% page.min=4 page.max=39
