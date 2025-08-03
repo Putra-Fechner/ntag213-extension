@@ -1,6 +1,7 @@
 //% weight=100 color=#0fbc11 icon="\uf2c2"
-const RC522_CS = DigitalPin.P16 // Change if you use another pin
-const RC522_RST = DigitalPin.P12 // Optional reset pin
+
+const RC522_CS = DigitalPin.P16
+const RC522_RST = DigitalPin.P12
 
 function spiWrite(address: number, value: number): void {
     pins.digitalWritePin(RC522_CS, 0)
@@ -17,21 +18,61 @@ function spiRead(address: number): number {
     return result
 }
 
+function sendRawCommand(data: Buffer): void {
+    pins.digitalWritePin(RC522_CS, 0)
+    for (let i = 0; i < data.length; i++) {
+        pins.spiWrite(data[i])
+    }
+    pins.digitalWritePin(RC522_CS, 1)
+}
+
+function initRC522() {
+    pins.spiFrequency(1000000)
+    pins.spiFormat(8, 0)
+    pins.digitalWritePin(RC522_CS, 1)
+}
+
 namespace NTAG {
     //% block="NTAG write page %page data %text"
     //% page.min=4 page.max=39
     export function ntagWrite(page: number, text: string): void {
-        let buf = pins.createBuffer(4)
+        initRC522()
+
+        let buf = pins.createBuffer(6)
+        buf.setUint8(0, 0xA2)         // Write command for NTAG213
+        buf.setUint8(1, page)         // Page number
         for (let i = 0; i < 4; i++) {
-            buf.setUint8(i, text.charCodeAt(i) || 32)
+            buf.setUint8(i + 2, text.charCodeAt(i) || 32) // 4 bytes of data
         }
-        serial.writeLine("Would write to page " + page + ": " + text)
+
+        sendRawCommand(buf)
+        serial.writeLine("Wrote to page " + page + ": " + text)
     }
 
     //% block="NTAG read page %page"
     //% page.min=4 page.max=39
     export function ntagRead(page: number): string {
-        serial.writeLine("Would read page " + page)
-        return "DEMO"
+        initRC522()
+
+        // Send 0x30 command to read 4 pages (16 bytes)
+        let send = pins.createBuffer(2)
+        send.setUint8(0, 0x30)
+        send.setUint8(1, page)
+
+        pins.digitalWritePin(RC522_CS, 0)
+        for (let i = 0; i < 2; i++) {
+            pins.spiWrite(send[i])
+        }
+
+        // Read 16 bytes; we’ll take the first 4 only
+        let result = ""
+        for (let i = 0; i < 4; i++) {
+            let byte = pins.spiWrite(0)
+            result += String.fromCharCode(byte)
+        }
+
+        pins.digitalWritePin(RC522_CS, 1)
+        serial.writeLine("Read from page " + page + ": " + result)
+        return result
     }
 }
